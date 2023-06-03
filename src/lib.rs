@@ -7,6 +7,7 @@ use cimvr_common::{
     ui::{Schema, State, UiHandle, UiStateHelper, UiUpdate},
     Transform,
 };
+use rhai::Dynamic;
 
 // All state associated with client-side behaviour
 struct ClientState {
@@ -19,7 +20,9 @@ struct ClientState {
 impl UserState for ClientState {
     // Implement a constructor
     fn new(io: &mut EngineIo, sched: &mut EngineSchedule<Self>) -> Self {
-        let rhai_engine = rhai::Engine::new();
+        let mut rhai_engine = rhai::Engine::new();
+        rhai_engine.register_fn("print", |d: Dynamic| println!("{}", d));
+        rhai_engine.register_fn("print", |s: &str| println!("{}", s));
 
         let mut ui = UiStateHelper::new();
 
@@ -49,9 +52,11 @@ impl UserState for ClientState {
             .subscribe::<UiUpdate>()
             .build();
 
+        let rhai_scope = rhai::Scope::new();
+
         Self {
             rhai_engine,
-            rhai_scope: rhai::Scope::new(),
+            rhai_scope, 
             widget,
             ui,
         }
@@ -60,14 +65,13 @@ impl UserState for ClientState {
 
 impl ClientState {
     fn transform_editor(&mut self, io: &mut EngineIo, query: &mut QueryResult) {
-        let map: Vec<Transform> = query
+        let map: HashMap<String, Transform> = query
             .iter("Transforms")
-            .map(|id| query.read::<Transform>(id))
+            .map(|id@EntityId(num)| (num.to_string(), query.read::<Transform>(id)))
             .collect();
 
         //dbg!(&map);
         let rhai_dyn_map = rhai::serde::to_dynamic(&map).unwrap();
-        //let rhai_dyn_map = rhai::Dynamic::from(map);
 
         self.rhai_scope.push_dynamic("transforms", rhai_dyn_map);
 
