@@ -1,7 +1,12 @@
-// Written by new.py, with love
-use cimvr_engine_interface::{make_app_state, prelude::*, println};
+use std::collections::HashMap;
 
-use cimvr_common::ui::{Schema, State, UiHandle, UiStateHelper, UiUpdate};
+// Written by new.py, with love
+use cimvr_engine_interface::{make_app_state, prelude::*, println, dbg};
+
+use cimvr_common::{
+    ui::{Schema, State, UiHandle, UiStateHelper, UiUpdate},
+    Transform,
+};
 
 // All state associated with client-side behaviour
 struct ClientState {
@@ -32,6 +37,14 @@ impl UserState for ClientState {
         let widget = ui.add(io, "Rhai", schema, state);
 
         sched
+            .add_system(Self::transform_editor)
+            .query(
+                "Transforms",
+                Query::new().intersect::<Transform>(Access::Write),
+            )
+            .build();
+
+        sched
             .add_system(Self::ui_update)
             .subscribe::<UiUpdate>()
             .build();
@@ -46,6 +59,19 @@ impl UserState for ClientState {
 }
 
 impl ClientState {
+    fn transform_editor(&mut self, io: &mut EngineIo, query: &mut QueryResult) {
+        let map: HashMap<EntityId, Transform> = query
+            .iter("Transforms")
+            .map(|id| (id, query.read::<Transform>(id)))
+            .collect();
+
+        dbg!(&map);
+        let rhai_dyn_map = rhai::serde::to_dynamic(&map).unwrap();
+
+        self.rhai_scope.push_dynamic("transforms", rhai_dyn_map);
+
+    }
+
     fn ui_update(&mut self, io: &mut EngineIo, _query: &mut QueryResult) {
         // Update the UI helper's internal state
         self.ui.download(io);
@@ -68,7 +94,9 @@ impl ClientState {
 
                 // Clear the text input
                 self.ui.modify(io, self.widget, |states| {
-                    states[2] = State::Label { text: result_text.clone() };
+                    states[2] = State::Label {
+                        text: result_text.clone(),
+                    };
                 });
             }
         }
