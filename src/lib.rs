@@ -21,8 +21,7 @@ impl UserState for ClientState {
     // Implement a constructor
     fn new(io: &mut EngineIo, sched: &mut EngineSchedule<Self>) -> Self {
         let mut rhai_engine = rhai::Engine::new();
-        rhai_engine.register_fn("print", |d: Dynamic| println!("{}", d));
-        rhai_engine.register_fn("print", |s: &str| println!("{}", s));
+        rhai_engine.on_print(|s: &str| println!("{}", s));
 
         let mut ui = UiStateHelper::new();
 
