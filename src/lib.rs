@@ -60,13 +60,14 @@ impl UserState for ClientState {
 
 impl ClientState {
     fn transform_editor(&mut self, io: &mut EngineIo, query: &mut QueryResult) {
-        let map: HashMap<EntityId, Transform> = query
+        let map: Vec<Transform> = query
             .iter("Transforms")
-            .map(|id| (id, query.read::<Transform>(id)))
+            .map(|id| query.read::<Transform>(id))
             .collect();
 
-        dbg!(&map);
+        //dbg!(&map);
         let rhai_dyn_map = rhai::serde::to_dynamic(&map).unwrap();
+        //let rhai_dyn_map = rhai::Dynamic::from(map);
 
         self.rhai_scope.push_dynamic("transforms", rhai_dyn_map);
 
