@@ -1,0 +1,16 @@
+[package]
+name = "rhai-plugin-test"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Written by new.py
+cimvr_common = { git = "https://github.com/ChatImproVR/iteration0.git", branch = "main" }
+cimvr_engine_interface  = { git = "https://github.com/ChatImproVR/iteration0.git", branch = "main" }
+serde = { version = "1", features = ["derive"] }
+rhai = { version = "1.14.0", default-features=false, features = ["serde", "no_time"] }
+
+[lib]
+crate-type = ["cdylib"]
