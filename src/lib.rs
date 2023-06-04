@@ -111,13 +111,21 @@ impl ClientState {
         if let Some(command) = self.command.take() {
             let result = self
                 .engine
-                .eval_with_scope::<Dynamic>(&mut self.scope, &command);
+                .eval_ast_with_scope::<()>(&mut self.scope, &self.script_ast);
 
-            self.response_text = match result {
-                Ok(result) => format!("Command: {}", result),
-                Err(e) => format!("Command caused error: {}", e),
-            };
-            dbg!(&self.response_text);
+            if let Err(e) = result {
+                self.response_text = format!("{}", e);
+            } else {
+                let result = self
+                    .engine
+                    .eval_with_scope::<Dynamic>(&mut self.scope, &command);
+
+                self.response_text = match result {
+                    Ok(result) => format!("Command: {}", result),
+                    Err(e) => format!("Command caused error: {}", e),
+                };
+                dbg!(&self.response_text);
+            }
         }
 
         // Copy ECS data back into cimvr
@@ -155,12 +163,12 @@ impl ClientState {
                 self.command = Some(text.clone());
 
                 /*
-                match cmd_compile_result {
-                    Ok(ast) => {
-                    }
-                    Err(e) => self.response_text = format!("Commandline error: {:#}", e),
-                };
-                */
+                   match cmd_compile_result {
+                   Ok(ast) => {
+                   }
+                   Err(e) => self.response_text = format!("Commandline error: {:#}", e),
+                   };
+                   */
             }
         }
 
