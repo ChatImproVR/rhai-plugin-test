@@ -101,7 +101,7 @@ impl ClientState {
         // Run update() function in script
         let result = self
             .engine
-            .eval_ast_with_scope::<()>(&mut self.scope, &self.script_ast);
+            .call_fn::<()>(&mut self.scope, &self.script_ast, "update", ());
 
         if let Err(e) = result {
             self.response_text = format!("Error running update(): {:#}", e);
