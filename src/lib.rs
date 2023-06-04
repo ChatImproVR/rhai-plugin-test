@@ -113,6 +113,8 @@ impl ClientState {
                 .engine
                 .eval_ast_with_scope::<()>(&mut self.scope, &self.script_ast);
 
+            println!("{}", self.scope);
+
             if let Err(e) = result {
                 self.response_text = format!("{}", e);
             } else {
@@ -129,11 +131,12 @@ impl ClientState {
         }
 
         // Copy ECS data back into cimvr
-        let returned_map = self.scope.get("transforms").unwrap();
-        let ret_map: HashMap<String, Transform> = rhai::serde::from_dynamic(returned_map).unwrap();
-        for (key, value) in ret_map {
-            let ent = EntityId(key.parse().unwrap());
-            query.write(ent, &value);
+        if let Some(returned_map) = self.scope.remove::<Dynamic>("transforms") {
+            let ret_map: HashMap<String, Transform> = rhai::serde::from_dynamic(&returned_map).unwrap();
+            for (key, value) in ret_map {
+                let ent = EntityId(key.parse().unwrap());
+                query.write(ent, &value);
+            }
         }
     }
 
