@@ -60,7 +60,7 @@ impl UserState for ClientState {
                 text: DEFAULT_SCRIPT.into(),
             },
             State::TextInput {
-                text: "run_me()".into(),
+                text: "state.run_me()".into(),
             },
             State::Button { clicked: false },
             State::Label { text: "".into() },
@@ -129,7 +129,7 @@ impl ClientState {
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let cmd_script = format!("{}\nstate.{}", self.script, command);
+            let cmd_script = format!("{}\n{}", self.script, command);
             let result = self
                 .engine
                 .eval_with_scope::<Dynamic>(&mut self.scope, &cmd_script);
