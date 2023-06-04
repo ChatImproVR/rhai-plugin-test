@@ -21,6 +21,8 @@ struct ClientState {
     command: Option<String>,
 }
 
+const BUILTIN_SCRIPT: &str = include_str!("builtins.rhai");
+
 const DEFAULT_SCRIPT: &str = r#"fn update() {
     if this.x == () {
          this.x = 0;
@@ -30,7 +32,7 @@ const DEFAULT_SCRIPT: &str = r#"fn update() {
 
     let k = this.transforms.keys()[0];
 
-    this.transforms[k]["pos"][1] = cos(this.x);
+    this.transforms[k]["orient"] = quat(this.x, 0., 0.);
 }
 
 fn run_me() {
@@ -122,7 +124,7 @@ impl ClientState {
 
         // Run update() function in script
         //println!("{}", self.scope);
-        let update_script = format!("{}\nstate.update();", self.script);
+        let update_script = format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, "state.update();");
         let result = self
             .engine
             .eval_with_scope::<()>(&mut self.scope, &update_script);
@@ -133,7 +135,7 @@ impl ClientState {
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let cmd_script = format!("{}\n{}", self.script, command);
+            let cmd_script =  format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, command);
             let result = self
                 .engine
                 .eval_with_scope::<Dynamic>(&mut self.scope, &cmd_script);
