@@ -26,12 +26,11 @@ const DEFAULT_SCRIPT: &str = r#"fn update() {
          this.x = 0;
     }
 
-    this.x += 1;
-    print(this.x);
+    this.x += 0.05;
 
     let k = this.transforms.keys()[0];
-    this.transforms[k]["pos"][1] += 0.001;
-    print(this.transforms[k]["pos"]);
+
+    this.transforms[k]["pos"][1] = cos(this.x);
 }
 
 fn run_me() {
