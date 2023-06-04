@@ -53,6 +53,9 @@ impl UserState for ClientState {
             Schema::TextBox,
             Schema::TextInput,
             Schema::Button { text: "Run".into() },
+            Schema::CheckBox {
+                text: "Continuous".into(),
+            },
             Schema::Label,
         ];
         let state = vec![
@@ -63,6 +66,7 @@ impl UserState for ClientState {
                 text: "state.run_me()".into(),
             },
             State::Button { clicked: false },
+            State::CheckBox { checked: false },
             State::Label { text: "".into() },
         ];
         let widget = ui.add(io, "Rhai", schema, state);
@@ -163,10 +167,11 @@ impl ClientState {
         // Update the UI helper's internal state
         self.ui.download(io);
 
+        // Compile the script
+        let ui_state = self.ui.read(self.widget);
+
         // Check for UI updates
         if io.inbox::<UiUpdate>().next().is_some() {
-            // Compile the script
-            let ui_state = self.ui.read(self.widget);
             let State::TextBox { text } = &ui_state[0] else { panic!() };
             let script_compile_result = self.engine.compile(text);
 
@@ -179,18 +184,20 @@ impl ClientState {
                 }
                 Err(e) => self.response_text = format!("Script compile error: {:#}", e),
             };
+        }
 
-            // Set the command line
-            if ui_state[2] == (State::Button { clicked: true }) {
-                let State::TextInput { text } = &ui_state[1] else { panic!() };
-                //let cmd_compile_result = self.engine.compile_expression(text);
-                self.command = Some(text.clone());
-            }
+        // Set the command line
+        if ui_state[2] == (State::Button { clicked: true })
+            || ui_state[3] == (State::CheckBox { checked: true })
+        {
+            let State::TextInput { text } = &ui_state[1] else { panic!() };
+            //let cmd_compile_result = self.engine.compile_expression(text);
+            self.command = Some(text.clone());
         }
 
         // Set the response text
-        self.ui.modify(io, self.widget, |states| {
-            states[3] = State::Label {
+        self.ui.modify(io, self.widget, |ui_state| {
+            ui_state[4] = State::Label {
                 text: self.response_text.clone(),
             };
         });
