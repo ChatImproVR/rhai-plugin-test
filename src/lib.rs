@@ -87,7 +87,7 @@ impl UserState for ClientState {
             scope: rhai_scope,
             widget,
             ui,
-            script: String::new(),
+            script: DEFAULT_SCRIPT.to_string(),
             response_text: "".into(),
         }
     }
