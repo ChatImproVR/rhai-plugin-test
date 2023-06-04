@@ -87,7 +87,7 @@ impl UserState for ClientState {
 }
 
 impl ClientState {
-    fn transform_editor(&mut self, io: &mut EngineIo, query: &mut QueryResult) {
+    fn transform_editor(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
         // Copy ECS data into rhai
         let map: HashMap<String, Transform> = query
             .iter("Transforms")
@@ -109,30 +109,33 @@ impl ClientState {
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let result = self
-                .engine
-                .eval_ast_with_scope::<()>(&mut self.scope, &self.script_ast);
-
-            println!("{}", self.scope);
-
-            if let Err(e) = result {
-                self.response_text = format!("{}", e);
-            } else {
-                let result = self
-                    .engine
-                    .eval_with_scope::<Dynamic>(&mut self.scope, &command);
-
-                self.response_text = match result {
-                    Ok(result) => format!("Command: {}", result),
-                    Err(e) => format!("Command caused error: {}", e),
-                };
-                dbg!(&self.response_text);
+            let mut parts = command.split_whitespace();
+            if let Some(fn_name) = parts.next() {
+                let result: Result<Vec<Dynamic>, _> = parts
+                    .map(|arg| self.engine.eval_with_scope::<Dynamic>(&mut self.scope, arg))
+                    .collect::<Result<_, _>>();
+                match result {
+                    Err(e) => self.response_text = format!("{}", e),
+                    Ok(args) => {
+                        let result = self.engine.call_fn::<Dynamic>(
+                            &mut self.scope,
+                            &self.script_ast,
+                            fn_name,
+                            args,
+                        );
+                        match result {
+                            Err(e) => self.response_text = format!("{}", e),
+                            Ok(d) => self.response_text = format!("{}", d),
+                        }
+                    }
+                }
             }
         }
 
         // Copy ECS data back into cimvr
         if let Some(returned_map) = self.scope.remove::<Dynamic>("transforms") {
-            let ret_map: HashMap<String, Transform> = rhai::serde::from_dynamic(&returned_map).unwrap();
+            let ret_map: HashMap<String, Transform> =
+                rhai::serde::from_dynamic(&returned_map).unwrap();
             for (key, value) in ret_map {
                 let ent = EntityId(key.parse().unwrap());
                 query.write(ent, &value);
@@ -151,12 +154,14 @@ impl ClientState {
             let State::TextBox { text } = &ui_state[0] else { panic!() };
             let script_compile_result = self.engine.compile(text);
 
-            self.response_text = match script_compile_result {
+            match script_compile_result {
                 Ok(ast) => {
                     self.script_ast = ast;
-                    format!("Compilation successful")
+                    if self.response_text.contains("error") {
+                        self.response_text = format!("Compilation successful");
+                    }
                 }
-                Err(e) => format!("Compile error: {:#}", e),
+                Err(e) => self.response_text = format!("Compile error: {:#}", e),
             };
 
             // Set the command line
@@ -164,14 +169,6 @@ impl ClientState {
                 let State::TextInput { text } = &ui_state[1] else { panic!() };
                 //let cmd_compile_result = self.engine.compile_expression(text);
                 self.command = Some(text.clone());
-
-                /*
-                   match cmd_compile_result {
-                   Ok(ast) => {
-                   }
-                   Err(e) => self.response_text = format!("Commandline error: {:#}", e),
-                   };
-                   */
             }
         }
 
