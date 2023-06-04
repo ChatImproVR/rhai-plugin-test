@@ -22,11 +22,18 @@ struct ClientState {
 }
 
 const DEFAULT_SCRIPT: &str = r#"fn update() {
-    
+    if this.x == () {
+         this.x = 0;
+    }
+
+    this.x += 1;
+    print(this.x);
 }
 
 fn run_me() {
     print("Hello, world!");
+    this.x = 0;
+    return this;
 }
 "#;
 
@@ -58,6 +65,11 @@ impl UserState for ClientState {
         let widget = ui.add(io, "Rhai", schema, state);
 
         sched
+            .add_system(Self::ui_update)
+            .subscribe::<UiUpdate>()
+            .build();
+
+        sched
             .add_system(Self::transform_editor)
             .query(
                 "Transforms",
@@ -65,11 +77,6 @@ impl UserState for ClientState {
                     .intersect::<Transform>(Access::Write)
                     .intersect::<Render>(Access::Read),
             )
-            .build();
-
-        sched
-            .add_system(Self::ui_update)
-            .subscribe::<UiUpdate>()
             .build();
 
         let rhai_scope = rhai::Scope::new();
@@ -104,10 +111,11 @@ impl ClientState {
         }
 
         // Run update() function in script
-        let update_cmd = format!("{}\n{}", self.script, "state.update();");
+        //println!("{}", self.scope);
+        let update_script = format!("{}\nstate.update();", self.script);
         let result = self
             .engine
-            .eval_with_scope::<()>(&mut self.scope, &update_cmd);
+            .eval_with_scope::<()>(&mut self.scope, &update_script);
 
         if let Err(e) = result {
             self.response_text = format!("Error running update(): {:#}", e);
@@ -115,10 +123,10 @@ impl ClientState {
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let result = self.engine.eval_with_scope::<Dynamic>(
-                &mut self.scope,
-                &command
-            );
+            let cmd_script = format!("{}\nstate.{}", self.script, command);
+            let result = self
+                .engine
+                .eval_with_scope::<Dynamic>(&mut self.scope, &cmd_script);
             match result {
                 Err(e) => self.response_text = format!("Error: {}", e),
                 Ok(d) => self.response_text = format!("Returned: {}", d),
@@ -150,11 +158,11 @@ impl ClientState {
             match script_compile_result {
                 Ok(_ast) => {
                     self.script = text.clone();
-                    if self.response_text.contains("error") {
+                    if self.response_text.contains("Error") {
                         self.response_text = format!("Compilation successful");
                     }
                 }
-                Err(e) => self.response_text = format!("Compile error: {:#}", e),
+                Err(e) => self.response_text = format!("Compile Error: {:#}", e),
             };
 
             // Set the command line
