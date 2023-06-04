@@ -28,7 +28,7 @@ const DEFAULT_SCRIPT: &str = r#"fn update() {
          this.x = 0;
     }
 
-    this.x += 0.05;
+    this.x += 0.02;
 
     let k = this.transforms.keys()[0];
 
