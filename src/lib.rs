@@ -142,11 +142,17 @@ impl ClientState {
         // Copy ECS data back into cimvr
         if let Some(mut state) = self.scope.remove::<rhai::Map>("state") {
             if let Some(transforms) = state.remove("transforms".into()) {
-                let ret_map: HashMap<String, Transform> =
-                    rhai::serde::from_dynamic(&transforms).unwrap();
-                for (key, value) in ret_map {
-                    let ent = EntityId(key.parse().unwrap());
-                    query.write(ent, &value);
+                let ret_map: Result<HashMap<String, Transform>, _> =
+                    rhai::serde::from_dynamic(&transforms);
+
+                match ret_map {
+                    Err(e) => self.response_text = format!("Error: {}", e),
+                    Ok(ret_map) => {
+                        for (key, value) in ret_map {
+                            let ent = EntityId(key.parse().unwrap());
+                            query.write(ent, &value);
+                        }
+                    }
                 }
             }
             self.scope.set_value("state", state);
