@@ -168,11 +168,11 @@ impl ClientState {
             match script_compile_result {
                 Ok(_ast) => {
                     self.script = text.clone();
-                    if self.response_text.contains("Error") {
+                    if self.response_text.contains("Script compile error") {
                         self.response_text = format!("Compilation successful");
                     }
                 }
-                Err(e) => self.response_text = format!("Compile Error: {:#}", e),
+                Err(e) => self.response_text = format!("Script compile error: {:#}", e),
             };
 
             // Set the command line
