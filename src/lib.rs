@@ -16,7 +16,7 @@ struct ClientState {
     engine: rhai::Engine,
     scope: rhai::Scope<'static>,
     widget: UiHandle,
-    script_ast: AST,
+    script: String,
     response_text: String,
     command: Option<String>,
 }
@@ -80,7 +80,7 @@ impl UserState for ClientState {
             scope: rhai_scope,
             widget,
             ui,
-            script_ast: AST::default(),
+            script: String::new(),
             response_text: "".into(),
         }
     }
@@ -98,10 +98,16 @@ impl ClientState {
 
         self.scope.push_dynamic("transforms", rhai_dyn_map);
 
+        // The variable "State" will always be available
+        if self.scope.get("state").is_none() {
+            self.scope.push("state", rhai::Map::new());
+        }
+
         // Run update() function in script
+        let update_cmd = format!("{}\n{}", self.script, "state.update();");
         let result = self
             .engine
-            .call_fn::<()>(&mut self.scope, &self.script_ast, "update", ());
+            .eval_with_scope::<()>(&mut self.scope, &update_cmd);
 
         if let Err(e) = result {
             self.response_text = format!("Error running update(): {:#}", e);
@@ -109,26 +115,13 @@ impl ClientState {
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let mut parts = command.split_whitespace();
-            if let Some(fn_name) = parts.next() {
-                let result: Result<Vec<Dynamic>, _> = parts
-                    .map(|arg| self.engine.eval_with_scope::<Dynamic>(&mut self.scope, arg))
-                    .collect::<Result<_, _>>();
-                match result {
-                    Err(e) => self.response_text = format!("{}", e),
-                    Ok(args) => {
-                        let result = self.engine.call_fn::<Dynamic>(
-                            &mut self.scope,
-                            &self.script_ast,
-                            fn_name,
-                            args,
-                        );
-                        match result {
-                            Err(e) => self.response_text = format!("{}", e),
-                            Ok(d) => self.response_text = format!("{}", d),
-                        }
-                    }
-                }
+            let result = self.engine.eval_with_scope::<Dynamic>(
+                &mut self.scope,
+                &command
+            );
+            match result {
+                Err(e) => self.response_text = format!("Error: {}", e),
+                Ok(d) => self.response_text = format!("Returned: {}", d),
             }
         }
 
@@ -155,8 +148,8 @@ impl ClientState {
             let script_compile_result = self.engine.compile(text);
 
             match script_compile_result {
-                Ok(ast) => {
-                    self.script_ast = ast;
+                Ok(_ast) => {
+                    self.script = text.clone();
                     if self.response_text.contains("error") {
                         self.response_text = format!("Compilation successful");
                     }
