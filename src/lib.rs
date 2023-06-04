@@ -21,7 +21,7 @@ struct ClientState {
     command: Option<String>,
 }
 
-const DEFAULT_SCRIPT: &str = r#"fn update(io) {
+const DEFAULT_SCRIPT: &str = r#"fn update() {
     if this.x == () {
          this.x = 0;
     }
@@ -29,9 +29,9 @@ const DEFAULT_SCRIPT: &str = r#"fn update(io) {
     this.x += 1;
     print(this.x);
 
-    let k = io.transforms.keys()[0];
-    io.transforms[k]["pos"][1] += 0.001;
-    print(io.transforms[k]["pos"]);
+    let k = this.transforms.keys()[0];
+    this.transforms[k]["pos"][1] += 0.001;
+    print(this.transforms[k]["pos"]);
 }
 
 fn run_me() {
@@ -99,27 +99,27 @@ impl UserState for ClientState {
 
 impl ClientState {
     fn transform_editor(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
-        // Copy ECS data into rhai
-        let map: HashMap<String, Transform> = query
-            .iter("Transforms")
-            .map(|id @ EntityId(num)| (num.to_string(), query.read::<Transform>(id)))
-            .collect();
-
-        let transforms_rhai = rhai::serde::to_dynamic(&map).unwrap();
-
         // The variable "State" will always be available
         if self.scope.get("state").is_none() {
             self.scope.push("state", rhai::Map::new());
         }
 
-        let io_items = [("transforms".into(), transforms_rhai)]
-            .into_iter()
-            .collect::<rhai::Map>();
-        self.scope.set_value("io", io_items);
+        // Copy ECS data into rhai
+        let map: HashMap<String, Transform> = query
+            .iter("Transforms")
+            .map(|id @ EntityId(num)| (num.to_string(), query.read::<Transform>(id)))
+            .collect();
+        let transforms_rhai = rhai::serde::to_dynamic(&map).unwrap();
+
+        // TODO: Just how slow is this?
+        if let Some(mut state) = self.scope.remove::<rhai::Map>("state") {
+            state.insert("transforms".into(), transforms_rhai);
+            self.scope.set_value("state", state);
+        }
 
         // Run update() function in script
         //println!("{}", self.scope);
-        let update_script = format!("{}\nstate.update(io);", self.script);
+        let update_script = format!("{}\nstate.update();", self.script);
         let result = self
             .engine
             .eval_with_scope::<()>(&mut self.scope, &update_script);
@@ -141,14 +141,16 @@ impl ClientState {
         }
 
         // Copy ECS data back into cimvr
-        if let Some(io) = self.scope.remove::<rhai::Map>("io") {
-            println!("yeah");
-            let ret_map: HashMap<String, Transform> =
-                rhai::serde::from_dynamic(&io["transforms"]).unwrap();
-            for (key, value) in ret_map {
-                let ent = EntityId(key.parse().unwrap());
-                query.write(ent, &value);
+        if let Some(mut state) = self.scope.remove::<rhai::Map>("state") {
+            if let Some(transforms) = state.remove("transforms".into()) {
+                let ret_map: HashMap<String, Transform> =
+                    rhai::serde::from_dynamic(&transforms).unwrap();
+                for (key, value) in ret_map {
+                    let ent = EntityId(key.parse().unwrap());
+                    query.write(ent, &value);
+                }
             }
+            self.scope.set_value("state", state);
         }
     }
 
