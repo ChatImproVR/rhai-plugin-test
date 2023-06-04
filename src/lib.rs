@@ -20,6 +20,10 @@ struct ClientState {
     response_text: String,
 }
 
+const DEFAULT_SCRIPT: &str = "fn update() {
+    
+}";
+
 impl UserState for ClientState {
     // Implement a constructor
     fn new(io: &mut EngineIo, sched: &mut EngineSchedule<Self>) -> Self {
@@ -35,7 +39,7 @@ impl UserState for ClientState {
             Schema::Label,
         ];
         let state = vec![
-            State::TextBox { text: "".into() },
+            State::TextBox { text: DEFAULT_SCRIPT.into() },
             //State::Button { clicked: false },
             State::Label { text: "".into() },
         ];
@@ -80,11 +84,22 @@ impl ClientState {
 
         self.rhai_scope.push_dynamic("transforms", rhai_dyn_map);
 
-        let result = self.rhai_engine
-            .run_ast_with_scope(&mut self.rhai_scope, &self.current_ast);
+        //let result = self.rhai_engine
+        //.run_ast_with_scope(&mut self.rhai_scope, &self.current_ast);
+
+        let result =
+            self.rhai_engine
+                .call_fn::<()>(&mut self.rhai_scope, &self.current_ast, "update", ());
 
         if let Err(e) = result {
             self.response_text = format!("Runtime error: {:#}", e);
+        } else {
+            let returned_map = self.rhai_scope.get("transforms").unwrap();
+            let ret_map: HashMap<String, Transform> = rhai::serde::from_dynamic(returned_map).unwrap();
+            for (key, value) in ret_map {
+                let ent = EntityId(key.parse().unwrap());
+                query.write(ent, &value);
+            }
         }
     }
 
