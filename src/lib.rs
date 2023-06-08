@@ -85,6 +85,23 @@ impl UserState for ClientState {
 }
 
 impl ClientState {
+    fn run_command(&mut self, command: &str) -> Result<Dynamic, String> {
+        // Run update() function in script
+        //println!("{}", self.scope);
+        let script = format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, command);
+        let result = self
+            .engine
+            .eval_with_scope::<Dynamic>(&mut self.scope, &script);
+
+        match result {
+            Err(e) => {
+                self.response_text = format!("Error running {}: {:#}", command, e);
+                Err(e.to_string())
+            },
+            Ok(dy) => Ok(dy),
+        }
+    }
+
     fn transform_editor(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
         // The variable "State" will always be available
         if self.scope.get("state").is_none() {
@@ -106,24 +123,12 @@ impl ClientState {
 
         // Run update() function in script
         //println!("{}", self.scope);
-        let update_script = format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, "state.update();");
-        let result = self
-            .engine
-            .eval_with_scope::<()>(&mut self.scope, &update_script);
-
-        if let Err(e) = result {
-            self.response_text = format!("Error running update(): {:#}", e);
-        }
+        let _ = self.run_command("state.update();");
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            let cmd_script =  format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, command);
-            let result = self
-                .engine
-                .eval_with_scope::<Dynamic>(&mut self.scope, &cmd_script);
-            match result {
-                Err(e) => self.response_text = format!("Error: {}", e),
-                Ok(d) => self.response_text = format!("Returned: {}", d),
+            if let Ok(d) = self.run_command(&command) {
+                self.response_text = format!("Returned: {}", d);
             }
         }
 
