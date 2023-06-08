@@ -72,7 +72,7 @@ impl UserState for ClientState {
 
         let rhai_scope = rhai::Scope::new();
 
-        Self {
+        let mut instance = Self {
             command: None,
             engine: rhai_engine,
             scope: rhai_scope,
@@ -80,18 +80,29 @@ impl UserState for ClientState {
             ui,
             script: DEFAULT_SCRIPT.to_string(),
             response_text: "".into(),
+        };
+
+        if let Ok(init_params) = instance.run_command::<rhai::Map>("state.init()") {
+            println!("{:?}", init_params);
         }
+
+        instance
     }
 }
 
 impl ClientState {
-    fn run_command(&mut self, command: &str) -> Result<Dynamic, String> {
+    fn run_command<T: rhai::Variant + Clone>(&mut self, command: &str) -> Result<T, String> {
+        // The variable "State" will always be available
+        if self.scope.get("state").is_none() {
+            self.scope.push("state", rhai::Map::new());
+        }
+
         // Run update() function in script
         //println!("{}", self.scope);
         let script = format!("\n{}\n{}\n{}", self.script, BUILTIN_SCRIPT, command);
         let result = self
             .engine
-            .eval_with_scope::<Dynamic>(&mut self.scope, &script);
+            .eval_with_scope::<T>(&mut self.scope, &script);
 
         match result {
             Err(e) => {
@@ -103,11 +114,6 @@ impl ClientState {
     }
 
     fn transform_editor(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
-        // The variable "State" will always be available
-        if self.scope.get("state").is_none() {
-            self.scope.push("state", rhai::Map::new());
-        }
-
         // Copy ECS data into rhai
         let map: HashMap<String, Transform> = query
             .iter("Transforms")
@@ -123,11 +129,11 @@ impl ClientState {
 
         // Run update() function in script
         //println!("{}", self.scope);
-        let _ = self.run_command("state.update();");
+        let _ = self.run_command::<()>("state.update();");
 
         // Run any command line commands
         if let Some(command) = self.command.take() {
-            if let Ok(d) = self.run_command(&command) {
+            if let Ok(d) = self.run_command::<Dynamic>(&command) {
                 self.response_text = format!("Returned: {}", d);
             }
         }

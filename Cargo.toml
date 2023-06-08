@@ -13,7 +13,7 @@ cimvr_common = { path = "../chatimprovr/common" }
 cimvr_engine_interface  = { path = "../chatimprovr/engine_interface" }
 
 serde = { version = "1", features = ["derive"] }
-rhai = { version = "1.14.0", default-features=false, features = ["serde", "no_time", "sync", "f32_float"] }
+rhai = { version = "1.14.0", default-features=false, features = ["serde", "no_time", "sync", "f32_float", "internals"] }
 
 [lib]
 crate-type = ["cdylib"]
