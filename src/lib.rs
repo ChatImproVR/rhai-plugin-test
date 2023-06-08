@@ -6,7 +6,7 @@ use cimvr_engine_interface::{dbg, make_app_state, prelude::*, println};
 use cimvr_common::{
     render::Render,
     ui::{Schema, State, UiHandle, UiStateHelper, UiUpdate},
-    Transform,
+    Transform, desktop::{KeyboardEvent, InputEvent},
 };
 use rhai::{Dynamic, AST};
 
@@ -18,6 +18,7 @@ struct ClientState {
     widget: UiHandle,
     script: String,
     response_text: String,
+    init_params: Option<rhai::Map>,
     command: Option<String>,
 }
 
@@ -60,19 +61,10 @@ impl UserState for ClientState {
             .subscribe::<UiUpdate>()
             .build();
 
-        sched
-            .add_system(Self::transform_editor)
-            .query(
-                "Transforms",
-                Query::new()
-                    .intersect::<Transform>(Access::Write)
-                    .intersect::<Render>(Access::Read),
-            )
-            .build();
-
         let rhai_scope = rhai::Scope::new();
 
         let mut instance = Self {
+            init_params: None,
             command: None,
             engine: rhai_engine,
             scope: rhai_scope,
@@ -82,9 +74,50 @@ impl UserState for ClientState {
             response_text: "".into(),
         };
 
-        if let Ok(init_params) = instance.run_command::<rhai::Map>("state.init()") {
-            println!("{:?}", init_params);
+        // Gather init params 
+        let init_params = instance.run_command::<rhai::Map>("state.init()");
+        if let Ok(init_params) = &init_params {
+            // Create system
+            let mut system = sched.add_system(Self::script_update);
+
+            // Add subscriptions to system
+            let subscription_set = init_params["subscriptions"].clone().into_typed_array::<String>().unwrap();
+
+            fn check_for_sub<'a, T: Message, U>(b: SystemBuilder<'a, U>, set: &[String]) -> SystemBuilder<'a, U> {
+                if set.contains(&T::CHANNEL.id.to_string()) {
+                    b.subscribe::<T>()
+                } else {
+                    b
+                }
+            }
+
+            system = check_for_sub::<InputEvent, _>(system, &subscription_set);
+
+            // Add queries to system
+            fn check_for_query<C: Component>(b: Query, set: &[String]) -> Query {
+                if set.contains(&C::ID.to_string()) {
+                    b.intersect::<C>(Access::Write)
+                } else {
+                    b
+                }
+            }
+
+            for (set_name, queries) in init_params["queries"].clone().cast::<rhai::Map>() {
+                let query_set = queries.into_typed_array::<String>().unwrap();
+                let mut query = Query::new();
+
+                query = check_for_query::<Transform>(query, &query_set);
+                query = check_for_query::<Render>(query, &query_set);
+
+                let set_name: &'static str = Box::leak(set_name.to_string().into_boxed_str());
+                system = system.query(&set_name, query);
+            }
+
+            // Finalize the system
+            system.build();
         }
+
+        instance.init_params = init_params.ok();
 
         instance
     }
@@ -113,7 +146,7 @@ impl ClientState {
         }
     }
 
-    fn transform_editor(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
+    fn script_update(&mut self, _io: &mut EngineIo, query: &mut QueryResult) {
         // Copy ECS data into rhai
         let map: HashMap<String, Transform> = query
             .iter("Transforms")

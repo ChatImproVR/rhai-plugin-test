@@ -1,7 +1,9 @@
 fn init() {
+    this.x = 0;
+
     return #{
         "queries": #{
-            "transforms": "cimvr_common/Transform",
+            "transforms": ["cimvr_common/Transform"],
         },
         "subscriptions": [
             "cimvr_common/KeyboardInput"
@@ -10,10 +12,6 @@ fn init() {
 }
 
 fn update() {
-    if this.x == () {
-         this.x = 0;
-    }
-
     this.x += 0.02;
 
     let k = this.transforms.keys()[0];
