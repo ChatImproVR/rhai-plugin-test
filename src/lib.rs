@@ -22,25 +22,7 @@ struct ClientState {
 }
 
 const BUILTIN_SCRIPT: &str = include_str!("builtins.rhai");
-
-const DEFAULT_SCRIPT: &str = r#"fn update() {
-    if this.x == () {
-         this.x = 0;
-    }
-
-    this.x += 0.02;
-
-    let k = this.transforms.keys()[0];
-
-    this.transforms[k]["orient"] = quat(this.x, 0., 0.);
-}
-
-fn run_me() {
-    print("Hello, world!");
-    this.x = 0;
-    return this;
-}
-"#;
+const DEFAULT_SCRIPT: &str = include_str!("default.rhai");
 
 impl UserState for ClientState {
     // Implement a constructor
