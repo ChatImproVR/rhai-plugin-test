@@ -1,3 +1,14 @@
+/*
+fn init() {
+    return {
+        "queries": {
+
+        },
+        "subscriptions": [
+        ],
+    };
+}
+*/
 fn update() {
     if this.x == () {
          this.x = 0;
