@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
 // Written by new.py, with love
-use cimvr_engine_interface::{dbg, make_app_state, prelude::*, println};
+use cimvr_engine_interface::{dbg, make_app_state, pkg_namespace, prelude::*, println};
 
 use cimvr_common::{
     render::Render,
-    ui::{Schema, State, UiHandle, UiStateHelper, UiUpdate},
+    ui::{GuiInputMessage, GuiTab, egui::TextEdit},
     Transform,
 };
 use rhai::{Dynamic, AST};
 
 // All state associated with client-side behaviour
 struct ClientState {
-    ui: UiStateHelper,
     engine: rhai::Engine,
     scope: rhai::Scope<'static>,
-    widget: UiHandle,
+    ui: GuiTab,
     script: String,
     response_text: String,
+    //response_is_error: bool,
     command: Option<String>,
 }
 
@@ -30,34 +30,9 @@ impl UserState for ClientState {
         let mut rhai_engine = rhai::Engine::new();
         rhai_engine.on_print(|s: &str| println!("{}", s));
 
-        let mut ui = UiStateHelper::new();
-
-        // Create chat "window"
-        let schema = vec![
-            Schema::TextInput,
-            Schema::Button { text: "Run".into() },
-            Schema::CheckBox {
-                text: "Continuous".into(),
-            },
-            Schema::Label,
-            Schema::TextBox,
-        ];
-        let state = vec![
-            State::TextInput {
-                text: "state.run_me()".into(),
-            },
-            State::Button { clicked: false },
-            State::CheckBox { checked: false },
-            State::Label { text: "".into() },
-            State::TextBox {
-                text: DEFAULT_SCRIPT.into(),
-            },
-        ];
-        let widget = ui.add(io, "Rhai", schema, state);
-
         sched
             .add_system(Self::ui_update)
-            .subscribe::<UiUpdate>()
+            .subscribe::<GuiInputMessage>()
             .build();
 
         sched
@@ -72,11 +47,13 @@ impl UserState for ClientState {
 
         let rhai_scope = rhai::Scope::new();
 
+        let ui = GuiTab::new(io, pkg_namespace!("code"));
+
         Self {
+            //response_is_error: false,
             command: None,
             engine: rhai_engine,
             scope: rhai_scope,
-            widget,
             ui,
             script: DEFAULT_SCRIPT.to_string(),
             response_text: "".into(),
@@ -97,7 +74,7 @@ impl ClientState {
             Err(e) => {
                 self.response_text = format!("Error running {}: {:#}", command, e);
                 Err(e.to_string())
-            },
+            }
             Ok(dy) => Ok(dy),
         }
     }
@@ -153,9 +130,20 @@ impl ClientState {
     }
 
     fn ui_update(&mut self, io: &mut EngineIo, _query: &mut QueryResult) {
-        // Update the UI helper's internal state
-        self.ui.download(io);
+        self.ui.show(io, |ui| {
+            let code_changed = ui.add_sized(ui.available_size(), TextEdit::multiline(&mut self.script).code_editor()).changed();
+            if code_changed {
+                if let Err(e) = self.engine.compile(&self.script) {
+                    self.response_text = format!("Script compile error: {:#}", e);
+                    //self.response_is_error = true;
+                } else {
+                    self.response_text = format!("Compilation successful");
+                    //self.response_is_error = false;
+                }
+            }
+        });
 
+        /*
         // Compile the script
         let ui_state = self.ui.read(self.widget);
 
@@ -190,6 +178,7 @@ impl ClientState {
                 text: self.response_text.clone(),
             };
         });
+        */
     }
 }
 
