@@ -1,14 +1,3 @@
-fn init() {
-    return #{
-        "queries": #{
-            "transforms": "cimvr_common/Transform",
-        },
-        "subscriptions": [
-            "cimvr_common/KeyboardInput"
-        ],
-    };
-}
-
 fn update() {
     if this.x == () {
          this.x = 0;

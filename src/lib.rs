@@ -5,7 +5,7 @@ use cimvr_engine_interface::{dbg, make_app_state, pkg_namespace, prelude::*, pri
 
 use cimvr_common::{
     render::Render,
-    ui::{GuiInputMessage, GuiTab, egui::TextEdit},
+    ui::{GuiInputMessage, GuiTab, egui::{TextEdit, Label, ScrollArea, RichText, Color32}},
     Transform,
 };
 use rhai::{Dynamic, AST};
@@ -14,9 +14,11 @@ use rhai::{Dynamic, AST};
 struct ClientState {
     engine: rhai::Engine,
     scope: rhai::Scope<'static>,
-    ui: GuiTab,
+    editor: GuiTab,
+    console: GuiTab,
     script: String,
     response_text: String,
+    command_line: String,
     //response_is_error: bool,
     command: Option<String>,
 }
@@ -47,14 +49,17 @@ impl UserState for ClientState {
 
         let rhai_scope = rhai::Scope::new();
 
-        let ui = GuiTab::new(io, pkg_namespace!("code"));
+        let editor = GuiTab::new(io, pkg_namespace!("editor"));
+        let console = GuiTab::new(io, pkg_namespace!("console"));
 
         Self {
             //response_is_error: false,
             command: None,
+            command_line: "state.run_me()".into(),
             engine: rhai_engine,
             scope: rhai_scope,
-            ui,
+            editor,
+            console,
             script: DEFAULT_SCRIPT.to_string(),
             response_text: "".into(),
         }
@@ -72,7 +77,7 @@ impl ClientState {
 
         match result {
             Err(e) => {
-                self.response_text = format!("Error running {}: {:#}", command, e);
+                self.response_text = format!("error running {}: {:#}", command, e);
                 Err(e.to_string())
             }
             Ok(dy) => Ok(dy),
@@ -116,7 +121,7 @@ impl ClientState {
                     rhai::serde::from_dynamic(&transforms);
 
                 match ret_map {
-                    Err(e) => self.response_text = format!("Error: {}", e),
+                    Err(e) => self.response_text = format!("error: {}", e),
                     Ok(ret_map) => {
                         for (key, value) in ret_map {
                             let ent = EntityId(key.parse().unwrap());
@@ -130,7 +135,7 @@ impl ClientState {
     }
 
     fn ui_update(&mut self, io: &mut EngineIo, _query: &mut QueryResult) {
-        self.ui.show(io, |ui| {
+        self.editor.show(io, |ui| {
             let code_changed = ui.add_sized(ui.available_size(), TextEdit::multiline(&mut self.script).code_editor()).changed();
             if code_changed {
                 if let Err(e) = self.engine.compile(&self.script) {
@@ -140,6 +145,27 @@ impl ClientState {
                     self.response_text = format!("Compilation successful");
                     //self.response_is_error = false;
                 }
+            }
+        });
+
+        self.console.show(io, |ui| {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.command_line);
+                if ui.button("Run").clicked() {
+                    self.command = Some(self.command_line.clone());
+                }
+            });
+
+            if self.response_text.contains("error") {
+                ScrollArea::vertical().show(ui, |ui| {
+                    ui.label(RichText::new(&self.response_text).color(Color32::RED).monospace());
+                });
+            } else if self.response_text.contains("Returned"){
+                ScrollArea::vertical().show(ui, |ui| {
+                    ui.label(RichText::new(&self.response_text).monospace());
+                });
+            } else {
+                ui.add_sized(ui.available_size(), Label::new(&self.response_text));
             }
         });
 
@@ -195,3 +221,16 @@ impl UserState for ServerState {
 // Defines entry points for the engine to hook into.
 // Calls new() for the appropriate state.
 make_app_state!(ClientState, ServerState);
+
+/*
+ *fn init() {
+    return #{
+        "queries": #{
+            "transforms": "cimvr_common/Transform",
+        },
+        "subscriptions": [
+            "cimvr_common/KeyboardInput"
+        ],
+    };
+}
+*/
