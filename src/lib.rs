@@ -5,10 +5,15 @@ use cimvr_engine_interface::{dbg, make_app_state, pkg_namespace, prelude::*, pri
 
 use cimvr_common::{
     render::Render,
-    ui::{GuiInputMessage, GuiTab, egui::{TextEdit, Label, ScrollArea, RichText, Color32}},
+    ui::{
+        egui::{Color32, Label, RichText, ScrollArea, TextEdit, TextStyle},
+        GuiInputMessage, GuiTab,
+    },
     Transform,
 };
 use rhai::{Dynamic, AST};
+use syntax_highlighting::code_view_ui;
+mod syntax_highlighting;
 
 // All state associated with client-side behaviour
 struct ClientState {
@@ -136,8 +141,21 @@ impl ClientState {
 
     fn ui_update(&mut self, io: &mut EngineIo, _query: &mut QueryResult) {
         self.editor.show(io, |ui| {
-            let code_changed = ui.add_sized(ui.available_size(), TextEdit::multiline(&mut self.script).code_editor()).changed();
-            if code_changed {
+            /*
+            let code_changed = ui
+                .add_sized(
+                    ui.available_size(),
+                    TextEdit::multiline(&mut self.script)
+                        .code_editor(),
+                )
+                .changed();
+            */
+
+            let code_changed = ScrollArea::vertical().show(ui, |ui| {
+                code_view_ui(ui, &mut self.script)
+            });
+
+            if code_changed.inner {
                 if let Err(e) = self.engine.compile(&self.script) {
                     self.response_text = format!("Script compile error: {:#}", e);
                     //self.response_is_error = true;
@@ -158,9 +176,13 @@ impl ClientState {
 
             if self.response_text.contains("error") {
                 ScrollArea::vertical().show(ui, |ui| {
-                    ui.label(RichText::new(&self.response_text).color(Color32::RED).monospace());
+                    ui.label(
+                        RichText::new(&self.response_text)
+                            .color(Color32::RED)
+                            .monospace(),
+                    );
                 });
-            } else if self.response_text.contains("Returned"){
+            } else if self.response_text.contains("Returned") {
                 ScrollArea::vertical().show(ui, |ui| {
                     ui.label(RichText::new(&self.response_text).monospace());
                 });
